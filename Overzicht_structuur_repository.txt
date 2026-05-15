@@ -1,0 +1,19 @@
+Haptic-Genu-Recurvatum/
+├── README.md
+├── source code/
+│   ├── arduino/
+│   │   └── Dual_IMU_Monitor.ino
+│   └── unity/
+│       ├── Assets/
+│       ├── Packages/
+│       ├── ProjectSettings/
+│       └── .gitignore             <-- Cruciaal voor Unity!
+├── hardware/
+│   ├── schema_breadboard.png
+│   └── datasheets/
+│       ├── MPU6050.pdf
+│       └── DRV2605L.pdf
+└── media/
+    ├── opstelling_been.jpg
+    ├── demo_video.mp4
+    └── flowchart_software.png
