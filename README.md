@@ -102,7 +102,7 @@ Although the functional proof has been provided, the current setup has clear lim
 * **Mechanical Wiring Vulnerability:** The use of breadboards, jumper wires, and I2C communication over longer physical distances along a moving limb is highly vulnerable to connection issues during dynamic walking. A momentary cable flex or micro-break causes the I2C data bus to lock up and freeze the system immediately.
 * **Soft Tissue Artifacts:** Mounting directly over active muscles and skin introduces minor, dynamic measurement errors due to muscle contraction and skin shifting during the gait cycle. While this is currently successfully mitigated by a static, hot-swappable calibration that calculates a personalized reference offset, high-frequency muscular noise remains present in the raw data stream.
 
-## Conclusion and Future Work (Step n+2)
+## Conclusion and Future Work 
 
 #### Conclusion
 The Dual-IMU Haptic Monitor demonstrates that it is possible to successfully replace the traditional, passive mechanical treatment of genu recurvatum with an active, wearable biofeedback system. By biomechanically modeling the leg with two independent sensors and mathematically eliminating spatial mounting errors via quaternion-based sensor fusion (Madgwick AHRS), this prototype eliminates the need for heavy, restrictive physical knee hinges.
