@@ -31,12 +31,13 @@ The **Dual-IMU Haptic Monitor** project offers an innovative, non-restrictive al
 
 | Component | Quantity | Purpose |
 | :--- | :--- | :--- |
-| Arduino Micro | 1 | Real-time control logic and sensor fusion |
-| MPU6050 IMU | 2 | Gait phase and orientation detection |
-| Drake Haptic Actuator | 1 | Vibrotactile cues |
-| DRV2605L Haptic Driver | 1 | Actuator driver |
-| Jumper wires & Breadboard | 1 | System integration |
-| Velcro straps | 2 | One for calf, one for thigh: component placement |
+| **Arduino Micro** | 1 | Real-time control logic and sensor fusion |
+| **MPU6050 IMU** | 2 | Gait phase and orientation detection |
+| **Drake Haptic Actuator** | 1 | Vibrotactile cues |
+| **DRV2605L Haptic Driver** | 1 | Actuator driver |
+| **Jumper wires & Breadboard** | 1 | System integration |
+| **PCA9548A Multiplexer** | 1 | Resolving I2C address conflicts between the two identical MPU6050 sensors, enabling independent communication |
+| **STEMMA QT** | 2 | I2C wiring for the sensor |
 
 ## Methods: Technical Approach & System Architecture
 
