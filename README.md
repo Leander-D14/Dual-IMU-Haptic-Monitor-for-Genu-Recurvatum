@@ -114,7 +114,6 @@ To further develop the current proof-of-concept into a production-ready, clinica
 
 * **Elimination of Yaw Drift (9-DOF Upgrade):** To structurally resolve the visual drift in the 3D application, a transition from 6-DOF sensors to 9-DOF IMUs (such as the BNO085 or MPU9250) is necessary. The addition of an integrated magnetometer allows the Madgwick filter to use the geomagnetic field as an absolute anchor, making the Yaw axis just as stable as the Pitch and Roll.
 * **Wireless Integration & Miniaturization (BLE):** Replacing fragile jumper cables and I2C wiring with individual Bluetooth Low Energy (BLE) microcontrollers mounted on a custom-made PCB. This prevents I2C communication errors caused by mechanical cable breakage and maximizes wearing comfort.
-* **Dynamic Gait Phase Detection:** The current algorithm relies on a fixed stance phase of 600 milliseconds following the initial Heel Strike (> 1.5g). For post-stroke patients with a highly asymmetrical or fluctuating gait pattern, this algorithm should be upgraded to a dynamic model that also actively measures the Toe-Off (the foot leaving the ground) to determine the exact active time window.
 * **Clinical Validation:** Initiating long-term testing sessions with the actual patient target group to quantitatively validate adaptation, reduction in tissue damage, and overall gait efficiency.
 
 
