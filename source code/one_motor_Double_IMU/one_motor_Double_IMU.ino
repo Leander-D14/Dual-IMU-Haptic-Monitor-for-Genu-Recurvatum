@@ -1,38 +1,62 @@
 #include <Wire.h>
+#include <MadgwickAHRS.h> 
 
 // ================================================================================
-// --- HAPTIC & MULTIPLEXER DEFINITIONS ---
+// --- USER CONFIGURATION ---
+// ================================================================================
+bool invertAngle = true;       // Set to 'true' if flexion results in a negative angle
+bool enableGaitPhase = false;   // 'true' = Vibrates on heel impact, 'false' = Vibrates constantly on hyperextension
+float warningAngle = 0.0;       // Angle (in degrees) triggering warning feedback
+float criticalAngle = -5.0;     // Angle (in degrees) triggering maximum feedback
+
+// ================================================================================
+// --- SYSTEM STATE & TIMING ---
+// ================================================================================
+bool isArmed = false;
+unsigned long bootTime = 0;
+const unsigned long autoCalibrateDelay = 5000; 
+
+unsigned long previousLoopTime = 0;
+const unsigned long loopInterval = 10;         
+
+unsigned long previousSerialTime = 0;
+const unsigned long serialInterval = 30;       
+
+// ================================================================================
+// --- HARDWARE DEFINITIONS ---
 // ================================================================================
 #define TCAADDR 0x70
-#define PWM6        OCR4D
-#define PWM13       OCR4A
+const int MPU = 0x68; 
 byte DRV = 0x5A;    
 byte ModeReg = 0x01;
+#define PWM6        OCR4D
+#define PWM13       OCR4A
 
 // ================================================================================
-// --- IMU & SYSTEM VARIABLES ---
+// --- KINEMATICS & SENSOR FUSION ---
 // ================================================================================
-const int MPU = 0x68; 
 
-// IMU 1 (Thigh - I2C Channel 2)
-float roll1 = 0.0, AccErrorX1 = 0.0, GyroErrorX1 = 0.0;
+Madgwick filterThigh;
+Madgwick filterCalf;
 
-// IMU 2 (Calf - I2C Channel 3)
-float roll2 = 0.0, AccErrorX2 = 0.0, GyroErrorX2 = 0.0;
-float AccX2, AccY2, AccZ2; // Required for dynamic impact detection
+float thighData[6];
+float calfData[6];
 
-float GyroX, accAngleX;
-float elapsedTime, currentTime, previousTime;
+float thighGyroOffset[3] = {0, 0, 0};
+float calfGyroOffset[3] = {0, 0, 0};
 
-// Gait Phase Detection Variables
+// Calibration offset for the gravity inclination method
+float angleOffset = 0.0;         
+float kneeAngle = 0.0;       
+
+// Gait Phase Variables
 bool stancePhase = false;
 unsigned long stanceTimer = 0;
-const float impactThreshold = 1.5; // Acceleration magnitude threshold for heel strike (g)
-const int stanceDuration = 600;    // Estimated stance phase duration (ms)
-bool isArmed = false;
+float impactThreshold = 1.5;       
+const int stanceDuration = 600;    
 
 // ================================================================================
-// --- I2C MULTIPLEXER ROUTING ---
+// --- I2C MULTIPLEXER ---
 // ================================================================================
 void tcaSelect(uint8_t i) {
   if (i > 7) return; 
@@ -47,139 +71,205 @@ void tcaSelect(uint8_t i) {
 void setup() {
   Serial.begin(115200);
   Wire.begin();
+  Wire.setClock(400000); 
 
-  // 1. Initialize Haptic Driver (Channel 0)
-  tcaSelect(0);
   pwm613configure();    
   delay(2);
   initializeDRV2605();  
   
-  // 2. Initialize & Calibrate Upper IMU (Channel 2)
-  tcaSelect(2);
-  setupMPU();
-  calibrateIMU(AccErrorX1, GyroErrorX1);
-
-  // 3. Initialize & Calibrate Lower IMU (Channel 3)
   tcaSelect(3);
   setupMPU();
-  calibrateIMU(AccErrorX2, GyroErrorX2);
+  calibrateGyro(3, thighGyroOffset);
 
-  // System verification pulse
   tcaSelect(0);
+  setupMPU();
+  calibrateGyro(0, calfGyroOffset);
+
+  filterThigh.begin(100);
+  filterCalf.begin(100);
+
   pulse(0.1, 10); 
-  Serial.println("System Initialized: Dual-IMU Genu Recurvatum Monitor Active");
+  bootTime = millis();
 }
 
 // ================================================================================
 // --- MAIN CONTROL LOOP ---
 // ================================================================================
 void loop() {
-  if (Serial.available() > 0) {
-    char cmd = Serial.read();
-    if (cmd == 'C') {
-      isArmed = true; 
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - previousLoopTime >= loopInterval) {
+    previousLoopTime = currentMillis;
+
+    // 1. Process Incoming Serial Commands
+    if (Serial.available() > 0) {
+      String incomingMsg = Serial.readStringUntil('\n'); 
+      
+      if (incomingMsg.startsWith("C")) {
+        calibrateHingeZero();
+      } else if (incomingMsg.startsWith("S:")) {
+        incomingMsg.remove(0, 2); 
+        
+        int commaIndex1 = incomingMsg.indexOf(',');
+        int commaIndex2 = incomingMsg.indexOf(',', commaIndex1 + 1);
+        int commaIndex3 = incomingMsg.indexOf(',', commaIndex2 + 1);
+        
+        if (commaIndex1 > 0 && commaIndex2 > 0 && commaIndex3 > 0) {
+          warningAngle = incomingMsg.substring(0, commaIndex1).toFloat();
+          criticalAngle = incomingMsg.substring(commaIndex1 + 1, commaIndex2).toFloat();
+          enableGaitPhase = (incomingMsg.substring(commaIndex2 + 1, commaIndex3).toInt() == 1);
+          impactThreshold = incomingMsg.substring(commaIndex3 + 1).toFloat();
+          pulse(0.2, 15); 
+        }
+      }
+    }
+
+    // 2. Standalone Auto-Calibration
+    if (!isArmed && (currentMillis - bootTime > autoCalibrateDelay)) {
+      calibrateHingeZero();
+      pulse(0.5, 20); delay(100); pulse(0.5, 20); 
+    }
+
+    // 3. Sensor Data Acquisition
+    readIMU(3, thighData, thighGyroOffset);
+    readIMU(0, calfData, calfGyroOffset);
+
+    // 4. Update 6DOF Quaternions
+    filterThigh.updateIMU(thighData[3], thighData[4], thighData[5], thighData[0], thighData[1], thighData[2]);
+    filterCalf.updateIMU(calfData[3], calfData[4], calfData[5], calfData[0], calfData[1], calfData[2]);
+
+    // 5. Biomechanical processing: GRAVITY INCLINATION METHOD
+    // Extracts the elevation angle of the longitudinal axis (assumed Y-axis) 
+    // relative to the horizontal plane, isolating the measurement from yaw drift.
+    
+    float tw = filterThigh.q0; float tx = filterThigh.q1; float ty = filterThigh.q2; float tz = filterThigh.q3;
+    float cw = filterCalf.q0; float cx = filterCalf.q1; float cy = filterCalf.q2; float cz = filterCalf.q3;
+
+    // 5A. Calculate the vertical Z-component of the sensor's local X-axis.
+    // Mathematical projection of the local X-axis onto the global Z-axis (gravity vector).
+    // Formula derived from the rotation matrix component R31: 2 * (x*z - w*y)
+    float thighVerticalComp = constrain(2.0f * (tx * tz - tw * ty), -1.0f, 1.0f);
+    float calfVerticalComp = constrain(2.0f * (cx * cz - cw * cy), -1.0f, 1.0f);
+
+    // 5B. Compute the elevation angle (in degrees) relative to the horizontal plane.
+    float thighElevation = asin(thighVerticalComp) * 180.0f / PI;
+    float calfElevation = asin(calfVerticalComp) * 180.0f / PI;
+
+    // 5C. Determine the true hinge angle based on the relative difference in elevation.
+    float trueAngle = calfElevation - thighElevation;
+
+    // 5D. Apply the calibration offset to establish the zero-degree baseline.
+    trueAngle -= angleOffset;
+
+    // 5E. Handle physical mounting inversions if required by user configuration.
+    if (invertAngle) {
+        trueAngle = -trueAngle;
+    }
+    
+    kneeAngle = trueAngle;
+
+    // 6. Gait Phase Detection 
+    float accMag2 = sqrt(pow(calfData[0], 2) + pow(calfData[1], 2) + pow(calfData[2], 2));
+    if (accMag2 > impactThreshold) {
+      stancePhase = true;
+      stanceTimer = currentMillis;
+    }
+    if (currentMillis - stanceTimer > stanceDuration) {
+      stancePhase = false;
+    }
+
+    // 7. Haptic Actuation Logic
+    bool shouldVibrate = enableGaitPhase ? (isArmed && stancePhase) : isArmed;
+
+    if (shouldVibrate) {
+      // NOTE: User requested warnings starting at 0.0, going down to -5.0
+      if (kneeAngle <= warningAngle && kneeAngle > criticalAngle) {
+        float freq = map(kneeAngle * 10, warningAngle * 10, criticalAngle * 10, 40, 120); 
+        float intens = map(kneeAngle * 10, warningAngle * 10, criticalAngle * 10, 0.2, 0.6);
+        vibrate(freq, intens, 0.05, 50); 
+      } else if (kneeAngle <= criticalAngle) {
+        impactClick(); 
+      }
+    }
+
+    // 8. Serial Telemetry Export
+    if (currentMillis - previousSerialTime >= serialInterval) {
+      previousSerialTime = currentMillis;
+
+      Serial.print("T:"); Serial.print(filterThigh.getPitch()); Serial.print(",");
+      Serial.print(filterThigh.getRoll()); Serial.print(",");
+      Serial.print(filterThigh.getYaw()); Serial.print("|");
+
+      Serial.print("C:"); Serial.print(filterCalf.getPitch()); Serial.print(",");
+      Serial.print(filterCalf.getRoll()); Serial.print(",");
+      Serial.print(filterCalf.getYaw()); Serial.print("|");
+
+      Serial.print("A:"); Serial.println(kneeAngle);
     }
   }
-  // Time delta calculation for continuous integration
-  previousTime = currentTime;
-  currentTime = millis();
-  elapsedTime = (currentTime - previousTime) / 1000.0;
-
-  // 1. Data Acquisition
-  updateIMU(2, roll1, AccErrorX1, GyroErrorX1);
-  updateIMU(3, roll2, AccErrorX2, GyroErrorX2);
-
-  // 2. Biomechanical Processing
-  float kneeAngle = roll1 - roll2; 
-
-  // 3. Gait Phase Detection (Heel Strike)
-  float accMag2 = sqrt(pow(AccX2, 2) + pow(AccY2, 2) + pow(AccZ2, 2));
-  
-  if (accMag2 > impactThreshold) {
-    stancePhase = true;
-    stanceTimer = millis();
-  }
-  
-  if (millis() - stanceTimer > stanceDuration) {
-    stancePhase = false;
-  }
-
-  // 4. Proportional Haptic Feedback (Hyperextension Prevention)
-  if (isArmed && stancePhase) {
-    if (kneeAngle <= 5.0 && kneeAngle > 0.0) {
-      // Pre-warning zone: Increasing frequency as joint approaches 0 degrees
-      float freq = map(kneeAngle * 10, 50, 0, 40, 120); 
-      float intens = map(kneeAngle * 10, 50, 0, 0.2, 0.6);
-      
-      tcaSelect(0);
-      vibrate(freq, intens, 0.05, 50); 
-      
-    } else if (kneeAngle <= 0.0) {
-      // Critical zone: Hyperextension detected, trigger mechanical impact cue
-      tcaSelect(0);
-      impactClick();
-    }
-  }
-
-  // 5. Serial Output for Digital Twin Visualization (Unity)
-  Serial.print("D:"); Serial.print(roll1); Serial.print(",");
-  Serial.print("K:"); Serial.print(roll2); Serial.print(",");
-  Serial.print("A:"); Serial.println(kneeAngle);
-
-  delay(5); // Loop stabilization
 }
 
 // ================================================================================
-// --- SENSOR FUSION & IMU ABSTRACTION ---
+// --- IMU HARDWARE ABSTRACTION ---
 // ================================================================================
+// ================================================================================
+// --- IMU HARDWARE ABSTRACTION ---
+// ================================================================================
+void calibrateHingeZero() {
+  // Retrieve current quaternion states
+  float tw = filterThigh.q0; float tx = filterThigh.q1; float ty = filterThigh.q2; float tz = filterThigh.q3;
+  float cw = filterCalf.q0; float cx = filterCalf.q1; float cy = filterCalf.q2; float cz = filterCalf.q3;
+
+  // Calculate current vertical projections for the local X-axis
+  float thighVerticalComp = constrain(2.0f * (tx * tz - tw * ty), -1.0f, 1.0f);
+  float calfVerticalComp = constrain(2.0f * (cx * cz - cw * cy), -1.0f, 1.0f);
+  
+  // Compute current anatomical elevation angles
+  float thighElevation = asin(thighVerticalComp) * 180.0f / PI;
+  float calfElevation = asin(calfVerticalComp) * 180.0f / PI;
+
+  // Store the natural resting difference as the zero-degree baseline offset
+  angleOffset = calfElevation - thighElevation;
+  
+  isArmed = true;
+}
+
 void setupMPU() {
-  Wire.beginTransmission(MPU); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(true);
-  Wire.beginTransmission(MPU); Wire.write(0x1C); Wire.write(0x00); Wire.endTransmission(true); // Set accelerometer to ±2g
-  Wire.beginTransmission(MPU); Wire.write(0x1B); Wire.write(0x00); Wire.endTransmission(true); // Set gyroscope to ±250 deg/s
+  Wire.beginTransmission(MPU); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(true); 
+  Wire.beginTransmission(MPU); Wire.write(0x1C); Wire.write(0x00); Wire.endTransmission(true); 
+  Wire.beginTransmission(MPU); Wire.write(0x1B); Wire.write(0x08); Wire.endTransmission(true); 
 }
 
-void calibrateIMU(float &errAcc, float &errGyro) {
-  int c = 0; float AccX, AccY, AccZ, GyroX_raw;
+void calibrateGyro(int channel, float* gyroOffset) {
+  tcaSelect(channel);
+  int numSamples = 200;
+  long gSum[3] = {0, 0, 0};
   
-  // Accelerometer calibration
-  while (c < 200) {
-    Wire.beginTransmission(MPU); Wire.write(0x3B); Wire.endTransmission(false); Wire.requestFrom(MPU, 6, true);
-    AccX = (Wire.read() << 8 | Wire.read()) / 16384.0; AccY = (Wire.read() << 8 | Wire.read()) / 16384.0; AccZ = (Wire.read() << 8 | Wire.read()) / 16384.0;
-    errAcc += ((atan(AccY / sqrt(pow(AccX, 2) + pow(AccZ, 2))) * 180 / PI));
-    c++; delay(3);
+  for (int i = 0; i < numSamples; i++) {
+    Wire.beginTransmission(MPU); Wire.write(0x43); Wire.endTransmission(false); Wire.requestFrom(MPU, 6, true);
+    gSum[0] += (Wire.read() << 8 | Wire.read());
+    gSum[1] += (Wire.read() << 8 | Wire.read());
+    gSum[2] += (Wire.read() << 8 | Wire.read());
+    delay(3);
   }
-  errAcc /= 200; 
-  c = 0;
   
-  // Gyroscope calibration
-  while (c < 200) {
-    Wire.beginTransmission(MPU); Wire.write(0x43); Wire.endTransmission(false); Wire.requestFrom(MPU, 2, true); 
-    GyroX_raw = (Wire.read() << 8 | Wire.read());
-    errGyro += (GyroX_raw / 131.0);
-    c++; delay(3);
-  }
-  errGyro /= 200;
+  gyroOffset[0] = (float)gSum[0] / numSamples / 65.5;
+  gyroOffset[1] = (float)gSum[1] / numSamples / 65.5;
+  gyroOffset[2] = (float)gSum[2] / numSamples / 65.5;
 }
 
-void updateIMU(int channel, float &currentRoll, float errAcc, float errGyro) {
+void readIMU(int channel, float* data, float* gyroOffset) {
   tcaSelect(channel); 
-  float AccX, AccY, AccZ;
   
-  // Read accelerometer data
   Wire.beginTransmission(MPU); Wire.write(0x3B); Wire.endTransmission(false); Wire.requestFrom(MPU, 6, true);
-  AccX = (Wire.read() << 8 | Wire.read()) / 16384.0; AccY = (Wire.read() << 8 | Wire.read()) / 16384.0; AccZ = (Wire.read() << 8 | Wire.read()) / 16384.0;
+  data[0] = (Wire.read() << 8 | Wire.read()) / 16384.0; 
+  data[1] = (Wire.read() << 8 | Wire.read()) / 16384.0; 
+  data[2] = (Wire.read() << 8 | Wire.read()) / 16384.0; 
   
-  // Store lower limb acceleration for impact detection
-  if (channel == 3) { AccX2 = AccX; AccY2 = AccY; AccZ2 = AccZ; }
-  
-  accAngleX = (atan(AccY / sqrt(pow(AccX, 2) + pow(AccZ, 2))) * 180 / PI) - errAcc;
-  
-  // Read gyroscope data
-  Wire.beginTransmission(MPU); Wire.write(0x43); Wire.endTransmission(false); Wire.requestFrom(MPU, 2, true);
-  GyroX = (Wire.read() << 8 | Wire.read()) / 131.0 - errGyro;
-  
-  // Closed-loop complementary filter
-  currentRoll = 0.96 * (currentRoll + GyroX * elapsedTime) + 0.04 * accAngleX;
+  Wire.beginTransmission(MPU); Wire.write(0x43); Wire.endTransmission(false); Wire.requestFrom(MPU, 6, true);
+  data[3] = ((Wire.read() << 8 | Wire.read()) / 65.5) - gyroOffset[0];
+  data[4] = ((Wire.read() << 8 | Wire.read()) / 65.5) - gyroOffset[1];
+  data[5] = ((Wire.read() << 8 | Wire.read()) / 65.5) - gyroOffset[2];
 }
 
 // ================================================================================
@@ -194,7 +284,6 @@ void initializeDRV2605() {
   Wire.beginTransmission(DRV); Wire.write(0x03); Wire.write(0x02); Wire.endTransmission();
   Wire.beginTransmission(DRV); Wire.write(0x17); Wire.write(0xff); Wire.endTransmission();
   Wire.beginTransmission(DRV); Wire.write(ModeReg); Wire.write(0x03); Wire.endTransmission();
-  delay(100);
 }
 
 #define PWM12k  5
@@ -202,7 +291,6 @@ void pwm613configure() {
   TCCR4A = 0; TCCR4B = PWM12k; TCCR4C = 0; TCCR4D = 0;
   PLLFRQ = (PLLFRQ & 0xCF) | 0x30; OCR4C = 255; pwmSet13();
 }
-void pwmSet6() { OCR4D = 0; DDRD |= _BV(7); TCCR4C |= 0x09; }
 void pwmSet13() { OCR4A = 0; DDRC |= _BV(7); TCCR4A = 0x82; }
 
 void usdelay(double time) { double us = time - ((int)time); for (int i = 0; i <= time; i++) { delay(1); } delayMicroseconds(us * 1000); }

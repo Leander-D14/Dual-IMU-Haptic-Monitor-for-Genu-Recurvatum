@@ -6,27 +6,33 @@ using UnityEngine;
 public class SerialReader : MonoBehaviour
 {
     [Header("Port Settings")]
-    public string portName = "COM3"; 
+    public string portName = "COM9"; 
     public int baudRate = 115200;
 
     [Header("Rig References")]
     public Transform kneePivot;         
     public MeshRenderer[] legRenderers; 
-    public Color normalColor = new Color(0.8f, 0.8f, 0.8f); 
-    public Color warningColor = Color.red;                  
 
-    [Header("Real-time Raw Data")]
-    public float thighRoll;
-    public float calfRoll;
+    [Header("Visual Feedback (Gradient)")]
+    public Gradient hyperextensionGradient;
+
+    [Header("Hardware Settings (Press 'S' to Sync)")]
+    public float warningAngle = 5f;
+    public float criticalAngle = 0f;
+    public bool enableGaitPhase = false;
+    public float impactThreshold = 1.5f;
+
+    [Header("Real-time 1D Data (Pitch Only)")]
+    public float rawThighPitch;
     public float rawKneeAngle;
 
     [Header("Calibrated Output")]
     public float calibratedThigh;
     public float calibratedKnee;
     
-    // Calibration offsets
+    // Calibration offsets for the 1D plane
     private float thighOffset = 0f;
-    private float kneeOffset = 0f;
+    // private float kneeOffset = 0f;
 
     private SerialPort serialPort;
     private Thread serialThread;
@@ -35,7 +41,6 @@ public class SerialReader : MonoBehaviour
 
     void Start()
     {
-        // Initialize the serial port with standard timeout parameters
         serialPort = new SerialPort(portName, baudRate);
         serialPort.ReadTimeout = 50;
 
@@ -43,9 +48,6 @@ public class SerialReader : MonoBehaviour
         {
             serialPort.Open();
             isRunning = true;
-            
-            // Execute serial read operations on a dedicated background thread 
-            // to prevent frame rate degradation in the main render loop.
             serialThread = new Thread(ReadSerialLoop);
             serialThread.Start();
             Debug.Log("Serial port successfully opened on " + portName);
@@ -56,7 +58,6 @@ public class SerialReader : MonoBehaviour
         }
     }
 
-    // Continuous background data acquisition loop
     void ReadSerialLoop()
     {
         while (isRunning && serialPort != null && serialPort.IsOpen)
@@ -65,16 +66,13 @@ public class SerialReader : MonoBehaviour
             { 
                 latestPacket = serialPort.ReadLine(); 
             }
-            catch (System.TimeoutException) 
-            { 
-                // Timeout is expected when the hardware buffer is momentarily empty
-            } 
+            catch (System.TimeoutException) { } 
         }
     }
 
     void Update()
     {
-        // 1. Process incoming serial packets synchronously in the main thread
+        // 1. Process incoming serial packets
         if (!string.IsNullOrEmpty(latestPacket))
         {
             ParsePacket(latestPacket);
@@ -87,57 +85,92 @@ public class SerialReader : MonoBehaviour
             CalibrateZeros();
         }
 
-        // 3. Compute calibrated kinematics by applying baseline offsets
-        calibratedThigh = thighRoll - thighOffset;
-        calibratedKnee = rawKneeAngle - kneeOffset;
+        // 3. Sync settings to Arduino
+        if (Input.GetKeyDown(KeyCode.S))
+        {
+            SyncSettingsToArduino();
+        }
 
-        // 4. Apply real-time rotations to the digital twin hierarchy
-        // Local Z-axis rotation simulates the anatomical flexion/extension plane.
+        // 4. Compute calibrated 1D kinematics
+        calibratedThigh = rawThighPitch - thighOffset;
+        calibratedKnee = rawKneeAngle;
+
+        // 5. Apply strictly 1D rotations (X-axis only, ignoring Y and Z drift completely)
         transform.localRotation = Quaternion.Euler(calibratedThigh, 0, 0);
-
+        
         if (kneePivot != null)
         {
+            // Knee is locally rotated on its hinge
             kneePivot.localRotation = Quaternion.Euler(calibratedKnee, 0, 0);
         }
 
-        // 5. Visual feedback: Trigger warning state upon detecting hyperextension (angle < 0 deg)
-        UpdateColors(calibratedKnee < 0f);
+        // 6. Visual feedback
+        UpdateGradientColor();
     }
 
     void ParsePacket(string packet)
     {
-        // Expected incoming payload format: "D:val,K:val,A:val"
-        string[] dataPairs = packet.Split(',');
-        foreach (string pair in dataPairs)
+        string[] blocks = packet.Split('|');
+        
+        foreach (string block in blocks)
         {
-            string[] keyValue = pair.Split(':');
-            if (keyValue.Length == 2)
+            string[] prefixAndData = block.Split(':');
+            if (prefixAndData.Length != 2) continue;
+
+            string prefix = prefixAndData[0];
+            string[] values = prefixAndData[1].Split(',');
+
+            // We explicitly ONLY grab the Pitch (values[0]) and ignore Roll and Yaw completely
+            if (prefix == "T" && values.Length == 3) 
             {
-                // Enforce invariant culture parsing to ensure consistent floating-point deserialization
-                if (float.TryParse(keyValue[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float value))
-                {
-                    if (keyValue[0] == "D") thighRoll = value;
-                    else if (keyValue[0] == "K") calfRoll = value;
-                    else if (keyValue[0] == "A") rawKneeAngle = value;
-                }
+                rawThighPitch = ParseFloat(values[0]);
+            }
+            else if (prefix == "A" && values.Length == 1) 
+            {
+                // The Arduino has already calculated the correct relative 1D angle safely
+                rawKneeAngle = ParseFloat(values[0]);
             }
         }
     }
 
-    void CalibrateZeros()
+    float ParseFloat(string s)
     {
-        thighOffset = thighRoll;
-        kneeOffset = rawKneeAngle;
-        if (serialPort != null && serialPort.IsOpen)
-        {
-            serialPort.Write("C");
-        }
-        Debug.Log("System calibrated: Current physical orientation established as the zero-degree baseline.");
+        float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out float result);
+        return result;
     }
 
-    void UpdateColors(bool isHyperextended)
+    void CalibrateZeros()
     {
-        Color targetColor = isHyperextended ? warningColor : normalColor;
+        // Store the linear offset
+        thighOffset = rawThighPitch;
+        
+        if (serialPort != null && serialPort.IsOpen)
+        {
+            serialPort.Write("C\n");
+        }
+        Debug.Log("System calibrated: 1D plane established as zero-degree baseline.");
+    }
+
+    void SyncSettingsToArduino()
+    {
+        if (serialPort != null && serialPort.IsOpen)
+        {
+            int gaitInt = enableGaitPhase ? 1 : 0;
+            string command = $"S:{warningAngle.ToString(CultureInfo.InvariantCulture)}," +
+                             $"{criticalAngle.ToString(CultureInfo.InvariantCulture)}," +
+                             $"{gaitInt}," +
+                             $"{impactThreshold.ToString(CultureInfo.InvariantCulture)}\n";
+            
+            serialPort.Write(command);
+            Debug.Log("Hardware Settings Synced: " + command);
+        }
+    }
+
+    void UpdateGradientColor()
+    {
+        float severity = Mathf.InverseLerp(warningAngle, criticalAngle, rawKneeAngle);
+        Color targetColor = hyperextensionGradient.Evaluate(severity);
+
         foreach (MeshRenderer rend in legRenderers)
         {
             if (rend != null)
@@ -149,15 +182,8 @@ public class SerialReader : MonoBehaviour
 
     void OnApplicationQuit()
     {
-        // Ensure deterministic termination of background threads and hardware streams
         isRunning = false;
-        if (serialThread != null && serialThread.IsAlive) 
-        {
-            serialThread.Join();
-        }
-        if (serialPort != null && serialPort.IsOpen) 
-        {
-            serialPort.Close();
-        }
+        if (serialThread != null && serialThread.IsAlive) serialThread.Join();
+        if (serialPort != null && serialPort.IsOpen) serialPort.Close();
     }
 }
