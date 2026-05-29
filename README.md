@@ -59,7 +59,16 @@ To ensure robustness during dynamic walking, the hardware is mounted on an exter
 
 ![Hardware integration on the physical brace prototype](Media/prototype.png)
 
-A significant hardware limitation when using multiple identical I2C sensors is the address conflict; by default, MPU6050 sensors share the exact same I2C address (0x68). In this design, this problem is elegantly solved by integrating the PCA9548A I2C multiplexer at address 0x70. Through a custom `tcaSelect(uint8_t i)` firmware function, this chip acts as a high-speed digital switch. By opening specific hardware channels sequentially, the microcontroller communicates targetedly at full speed (400kHz) with the upper thigh IMU on channel 3 and the lower calf IMU on channel 0. The DRV2605L haptic driver communicates directly on the I2C bus at address 0x5A, independently of the multiplexer. The wiring for this configuration is shown below.
+A significant hardware limitation when using multiple identical I2C sensors is the address conflict; by default, MPU6050 sensors share the exact same I2C address (0x68). In this design, this problem is elegantly solved by integrating the PCA9548A I2C multiplexer at address 0x70. Through a custom `tcaSelect(uint8_t i)` firmware function, this chip acts as a high-speed digital switch. By opening specific hardware channels sequentially, the microcontroller communicates targetedly at full speed (400kHz) with the upper thigh IMU on channel 3 and the lower calf IMU on channel 0. The DRV2605L haptic driver communicates directly on the I2C bus at address 0x5A, independently of the multiplexer.
+
+The wiring for this configuration, with is shown below:
+
+1. Arduino
+2. 2x MPU6050 IMU
+3. DRV2605L Haptic Driver
+4. Drake Haptic Actuator
+5. Multiplexer PCA9548A
+
 
 ![Detailed wiring of the mainboard components](Media/Breadbord_wiring.png)  
 
