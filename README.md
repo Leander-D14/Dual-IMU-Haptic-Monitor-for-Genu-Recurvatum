@@ -46,7 +46,7 @@ To ensure full reproducibility of this prototype, the complete Bill of Materials
 | **STEMMA QT / Qwiic Cable**| Generic JST SH 4-pin | 2 | € 2.00 | Robust I2C communication wiring along the leg |
 | **Jumper Wires** | Generic M/M & M/F | 1 | € 4.00 | System integration and breadboard routing |
 | **Orthopedic Knee Brace** | BREG | 1 | / | Physical mounting frame for the sensors and haptic actuator |
-| **Total Estimated Cost** | | | **~ € 100.00** | |
+| **Total Estimated Cost** | | | ~ € 100.00 | |
 
 ## Methods: Technical Approach & System Architecture
 
