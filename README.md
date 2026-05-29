@@ -8,6 +8,8 @@ Genu recurvatum, or knee hyperextension, is a highly relevant clinical problem a
 * **Gait Inefficiency:** It results in an inefficient gait; because the knee does not bend normally, the leg effectively becomes longer. This raises the body's center of gravity, disrupts symmetry, and leads to a much higher metabolic energy expenditure during ambulation.
 * **Proprioceptive Loss:** Many stroke patients develop this abnormality because a loss of internal proprioception means they simply no longer physically feel when their knee joint reaches or exceeds the anatomical limit of 0 degrees [1].
 
+![Medical illustration of Genu Recurvatum bone structure](media/Hyperextension_knee.jpg)
+
 ### The Haptic Advantage
 For this specific pathological challenge, haptic technology is ideally suited to act as an **external haptic sense**. Because the patient lacks the internal sensory warning that the knee is hyperextending, an external vibrotactile stimulus can directly substitute for this missing sensory feedback loop [4]. 
 
@@ -27,42 +29,58 @@ The **Dual-IMU Haptic Monitor** project offers an innovative, non-restrictive al
 3. **Advanced Sensor Fusion (4D Quaternions):**To avoid gyroscopic drift and improve stability under dynamic movement, the architecture implements a Madgwick AHRS algorithm for each IMU, computing the absolute 3D orientation of each leg segment as a full quaternion. The relative knee angle is then extracted via a Gravity Inclination Method, which anchors both measurements independently to the gravity vector, yielding a stable and drift-resistant angle estimate during the stance phase.
 4. **Hybrid Feedback Loop:** The disruptive audible alarm of previous setups is replaced by precise, proportional tactile vibration profiles delivered via high-fidelity *Drake Haptic Actuators* [6]. This data is simultaneously streamed via telemetry to a real-time **3D Digital Twin** in Unity. This creates a powerful dual-loop system: the patient receives physical (proprioceptive) guidance, while the physical therapist receives immediate visual (exteroceptive) confirmation of hyperextension and gait asymmetry for diagnostic mapping.
 
-### Supplies
+### Supplies (Bill of Materials)
 
-| Component | Quantity | Purpose |
-| :--- | :--- | :--- |
-| **Arduino Micro** | 1 | Real-time control logic and sensor fusion |
-| **MPU6050 IMU** | 2 | Gait phase and orientation detection |
-| **Drake Haptic Actuator** | 1 | Vibrotactile cues |
-| **DRV2605L Haptic Driver** | 1 | Actuator driver |
-| **Jumper wires & Breadboard** | 1 | System integration |
-| **PCA9548A Multiplexer** | 1 | Resolving I2C address conflicts between the two identical MPU6050 sensors, enabling independent communication |
-| **STEMMA QT** | 2 | I2C wiring for the IMU |
+To ensure full reproducibility of this prototype, the complete Bill of Materials is listed below. Where specific breakout boards were used (e.g., Adafruit), exact part numbers are provided.
+
+To ensure full reproducibility of this prototype, the complete Bill of Materials is listed below. Where specific breakout boards were used (e.g., Adafruit), exact part numbers are provided.
+
+| Component | Part Number / SKU | Qty | Estimated Cost | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **Arduino Micro** | A000053 | 1 | € 21.00 | Microcontroller for real-time control logic and sensor fusion |
+| **MPU6050 6-DoF IMU** | GY-521 | 2 | € 6.00 | Inertial sensors for dynamic orientation and gait phase detection |
+| **I2C Multiplexer** | Adafruit 2717 (PCA9548A) | 1 | € 8.00 | Resolves I2C address conflicts between the two identical MPU6050 sensors, enabling independent communication |
+| **Haptic Motor Driver** | Adafruit 2305 (DRV2605L) | 1 | € 9.00 | I2C driver for generating complex haptic waveforms (LRA/ERM) |
+| **Drake Haptic Actuator** | TH-D-952395-LFI | 1 | € 45.00 | High-fidelity vibrotactile feedback and impact clicks |
+| **Breadboard** | Generic 800-tie | 1 | € 5.00 | Prototyping platform and central hardware integration |
+| **STEMMA QT / Qwiic Cable**| Generic JST SH 4-pin | 2 | € 2.00 | Robust I2C communication wiring along the leg |
+| **Jumper Wires** | Generic M/M & M/F | 1 | € 4.00 | System integration and breadboard routing |
+| **Orthopedic Knee Brace** | BREG | 1 | / | Physical mounting frame for the sensors and haptic actuator |
+| **Total Estimated Cost** | | | **~ € 100.00** | |
 
 ## Methods: Technical Approach & System Architecture
+
+![System Architecture Flow Diagram](media/Flow_diagram.png)
 
 The conceptual framework of the Dual-IMU Haptic Monitor relies on creating a wearable, real-time biofeedback system that replaces the patient's impaired proprioceptive sense. By treating the leg as a two-part biomechanical hinge system (thigh and calf), the relative knee angle can be continuously calculated without the need to place an obstructive physical hinge across the joint.
 
 ### 1. Hardware Integration & I2C Routing
-To ensure robustness during dynamic walking, the hardware is mounted on an external brace frame. The mainboard setup—consisting of the Arduino Micro, the DRV2605L haptic driver, and the primary MPU6050 IMU sensor—is securely attached to the thigh segment using Velcro straps. The second MPU6050 IMU sensor is fixed to the calf segment. This stabilization minimizes the structural influence of muscle contractions on the sensors and provides a stable platform for the wiring. Although the system uses a brace as a physical mounting frame, the angle measurement functions entirely electronically via the IMUs and requires no physical blockage or mechanical hinge components.
+To ensure robustness during dynamic walking, the hardware is mounted on an external brace frame. The mainboard setup—consisting of the Arduino Micro, the DRV2605L haptic driver, and the primary MPU6050 IMU sensor—is securely attached to the thigh segment using Velcro straps. The second MPU6050 IMU sensor is fixed to the calf segment. This stabilization minimizes the structural influence of muscle contractions on the sensors and provides a stable platform for the wiring. Although the system uses a brace as a physical mounting frame, the angle measurement functions entirely electronically via the IMUs and requires no physical blockage or mechanical hinge components. The placement of these components on the physical prototype is illustrated below.
 
-A significant hardware limitation when using multiple identical I2C sensors is the address conflict; by default, MPU6050 sensors share the exact same I2C address (0x68). In this design, this problem is elegantly solved by integrating the PCA9548A I2C multiplexer at address 0x70. Through a custom `tcaSelect(uint8_t i)` firmware function, this chip acts as a high-speed digital switch. By opening specific hardware channels sequentially, the microcontroller communicates targetedly at full speed (400kHz) with the upper thigh IMU on channel 3 and the lower calf IMU on channel 0. The DRV2605L haptic driver communicates directly on the I2C bus at address 0x5A, independently of the multiplexer.
+![Hardware integration on the physical brace prototype](media/prototype.png)
+
+A significant hardware limitation when using multiple identical I2C sensors is the address conflict; by default, MPU6050 sensors share the exact same I2C address (0x68). In this design, this problem is elegantly solved by integrating the PCA9548A I2C multiplexer at address 0x70. Through a custom `tcaSelect(uint8_t i)` firmware function, this chip acts as a high-speed digital switch. By opening specific hardware channels sequentially, the microcontroller communicates targetedly at full speed (400kHz) with the upper thigh IMU on channel 3 and the lower calf IMU on channel 0. The DRV2605L haptic driver communicates directly on the I2C bus at address 0x5A, independently of the multiplexer. The wiring for this configuration is shown below.
+
+![Detailed wiring of the mainboard components](media/Breadbord_wiring.jpg)  
 
 ### 2. Control Loop & Time Synchronization
 Instead of utilizing an unpredictable and processor-blocking `delay()`, the main execution loop (`loop()`) utilizes a strict, non-blocking timer via the native `millis()` function. The software exclusively executes calculations, sensor sampling, and telemetry transmission when exactly 10 milliseconds have elapsed since the previous cycle, establishing a fixed execution loop frequency of **100Hz**. This rock-solid time base ($\Delta t$) is a strict mathematical requirement to maintain the stability of the numerical integration steps within the sensor fusion algorithm.
 
-### 3. Advanced Sensor Fusion (4D Quaternions)
-To compensate for the mutual limitations of accelerometers and gyroscopes, the system implements a Madgwick AHRS filter for each IMU. This filter continuously calculates the absolute 3D orientation of each leg segment as a full quaternion ($Q = [W, X, Y, Z]$), using the gravity vector as a stable anchor to correct gyroscopic drift over time.
+### 3. Advanced Sensor Fusion & Gravity Inclination Method
 
-The relative knee angle is then extracted via a Gravity Inclination Method. From each quaternion, the vertical projection of the sensor's local axis onto the global gravity vector is computed using rotation matrix component $R_{31}$:
+Accelerometers react extremely fast but are highly sensitive to high-frequency noise from walking vibrations. Conversely, gyroscopes measure angular velocity accurately, but integrating this data over time introduces numerical errors, causing the calculated angle to drift. 
 
-$$\text{verticalComponent} = 2(xz - wy)$$
+To compensate for these mutual limitations, the system relies on a customized Madgwick AHRS filter. However, instead of extracting standard Euler angles—which are prone to cross-axis coupling and gimbal lock—the architecture implements a custom **Gravity Inclination Method** derived directly from the 4D Quaternions ($Q=[w, x, y, z]$).
 
-This yields the elevation angle of each leg segment relative to the horizontal plane. The knee angle is then derived as the difference between the two:
+The true hinge angle is calculated in three biomechanical steps:
 
-$$\theta_{\text{knee}} = \theta_{\text{calf}} - \theta_{\text{thigh}}$$
+1. **Absolute 3D Orientation:** The independent Madgwick filters ingest the 6-DoF inertial data to maintain a highly stable, absolute 4D quaternion for both the thigh ($Q_{thigh}$) and the calf ($Q_{calf}$).
+2. **Gravity Vector Projection:** To protect the system against gyroscopic Yaw-drift (heading drift), the software computes the vertical projection of the sensor's local longitudinal axis onto the global gravity vector. This is achieved using the rotation matrix component $R_{31}$:
+   $$\text{Vertical Component} = 2(xz - wy)$$
+3. **Elevation & Hinge Isolation:** Using the inverse sine ($\arcsin$), the absolute elevation angle of each leg segment relative to the horizontal plane is calculated. The true knee flexion is then derived as the difference between the two:
+   $$\theta_{knee} = \theta_{calf} - \theta_{thigh}$$
 
-Because this method anchors both measurements independently to gravity, it remains stable under gyroscopic drift and minor sensor vibrations. However, it is sensitive to yaw-axis misalignment between the two sensors — a rotational offset in the horizontal plane will introduce a small systematic error. In practice, this is effectively compensated by the hot-swappable calibration step, which captures the resting offset at the start of each session and subtracts it as a baseline correction.
+Because this method anchors both measurements independently to gravity, it remains robust against 6-DOF Yaw-drift and minor sensor vibrations. However, it is sensitive to yaw-axis misalignment between the two sensors—a physical rotational offset in the horizontal plane introduces a small systematic error. In practice, this is elegantly compensated by the system's hot-swappable calibration phase, which captures this specific resting offset and mathematically subtracts it as a baseline correction.
 
 ### 4. Gait Phase Detection & Proportional Feedback
 Genu recurvatum is exclusively harmful when the lower limb is bearing the patient's actual body weight during the stance phase of walking. To prevent false, disruptive warnings (for example, when the patient is safely sitting or lifting the leg), a context-aware Gait Phase Detection algorithm was developed.
@@ -78,7 +96,9 @@ To accommodate anatomical variability and minor day-to-day variations in sensor 
 * **Software-based (Hot-swap):** The clinical therapist can send the character `'C'` over the virtual serial port via the graphical user interface in Unity.
 * **Standalone (Auto-arm):** When operating remotely on battery power without a host PC, the embedded system automatically captures the current baseline orientation as the reference stance after a 5-second stabilization period, confirming calibration to the patient via a distinct double-pulse vibration.
 
-From this personalized zero point, the virtual 3D rig tracks the patient's anatomical movements exactly. For immediate visual feedback, the leg model in Unity turns bright red the moment the sensor fusion registers a hyperextension event below 0°. This creates a powerful, hybrid feedback loop: the patient is corrected physically (haptically) in real time, while the therapist monitors the kinematics visually (digitally) for gait mapping.
+From this personalized zero point, the virtual 3D rig tracks the patient's anatomical movements exactly. For immediate visual feedback, the leg model in Unity turns bright red the moment the sensor fusion registers a hyperextension event below 0°. This creates a powerful, hybrid feedback loop: the patient is corrected physically (haptically) in real time, while the therapist monitors the kinematics visually (digitally) for gait mapping. As demonstrated below, the virtual 3D model provides immediate visual feedback.
+
+![Unity Digital Twin visualizing hyperextension in red](media/Hyperextension_knee.png)
 
 ## Discussion: Evaluation of the Dual-IMU Haptic Monitor
 
@@ -89,9 +109,10 @@ The prototype successfully calculates the relative knee angle in real-time witho
 
 A major gain in reliability was achieved by optimizing the control loop. Whereas standard Arduino prototypes often rely on unpredictable `delay()` functions, the implementation of a non-blocking timer via `millis()` guarantees that the data acquisition runs exclusively at a fixed frequency of 100Hz (10ms). This ensures the stable integration steps that are mathematically necessary for complex 3D filters.
 
-#### Sensor Fusion: The Power of Quaternions
-The transition from one-dimensional Complementary Filters to a Madgwick AHRS algorithm based on 4D Quaternions has been the most significant iteration within this project. The Madgwick filter uses the gravity vector as a continuous correction anchor, preventing the gyroscopic drift that would otherwise accumulate during extended walking trials.
-The relative knee angle is extracted via the Gravity Inclination Method, computing the elevation angle of each leg segment independently from its quaternion and subtracting the two. This approach proved highly stable under dynamic movement and minor sensor vibrations. However, it remains sensitive to yaw-axis misalignment between the two sensors. In practice, this is effectively compensated by the hot-swappable calibration step at the start of each session.
+#### Sensor Fusion: Strategic Data Reduction
+The transition from initial one-dimensional Complementary Filters to a full Madgwick AHRS algorithm, and ultimately to the Gravity Inclination Method, represents a deliberate engineering trade-off to accommodate hardware limitations. 
+
+Because the MPU6050 is a 6-DOF sensor lacking a magnetometer, it possesses no absolute reference for the Yaw-axis (the global north). Full 3D mathematical derivation fails under these conditions because the two sensors lack a shared world reference frame, leading to rapid error propagation. By isolating only the matrix components projected onto the Z-axis, the algorithm deliberately discards this unstable spatial data. It reduces the complex 3D orientation to a highly reliable 1D sagittal plane measurement, mathematically bypassing the hardware's Yaw-drift limitation entirely.
 
 #### Haptic and Clinical Strategy
 The choice of decentralized, proportional vibrotactile feedback via the DRV2605L driver is a fundamental improvement over binary systems (which only vibrate once the damage is already done). The transition from a vibration increasing in frequency in the pre-warning zone (5° to 0°) to an abrupt, sharp `impactClick()` below 0° proves to be highly intuitive. It warns the user preventively without causing a startle response, which significantly accelerates the motor learning curve and user acceptance.
@@ -101,21 +122,21 @@ In addition, the integration of a Unity 3D environment expands the functionality
 #### Limitations Observed During Testing
 Although the functional proof has been provided, the current setup has clear limitations that require further structural development:
 
-* **Visual Yaw Drift (The 6-DOF Limitation):** In 3D space, the Madgwick filter uses gravity as an anchor for Pitch and Roll, keeping them highly accurate for the haptic feedback control loop on the microcontroller. However, because a 6-DOF sensor (such as the MPU6050) lacks an integrated digital compass (magnetometer), the Yaw axis (rotation around its own vertical axis) drifts over time. Visually, this results in a gradual, artificial 'twisting' of the leg in the Unity model during extended walking trials.
-* **Mechanical Wiring Vulnerability:** The use of breadboards, jumper wires, and I2C communication over longer physical distances along a moving limb is highly vulnerable to connection issues during dynamic walking. A momentary cable flex or micro-break causes the I2C data bus to lock up and freeze the system immediately.
-* **Soft Tissue Artifacts:** Mounting directly over active muscles and skin introduces minor, dynamic measurement errors due to muscle contraction and skin shifting during the gait cycle. While this is currently successfully mitigated by a static, hot-swappable calibration that calculates a personalized reference offset, high-frequency muscular noise remains present in the raw data stream.
+* **Sagittal Plane Dependency:** Because the Gravity Inclination method projects the sensor's X-axis onto the global Z-axis, it assumes the sensors are mounted relatively parallel to the sagittal plane (the direction of walking). Severe lateral rotation of the Velcro straps degrades the accuracy of the flexion measurement.
+* **Out-of-Plane Kinematic Artifacts:** The algorithm calculates elevation relative to the ground. Consequently, out-of-plane movements, such as hip abduction (lifting the straight leg sideways), alter the gravity projection and can be falsely interpreted by the system as knee flexion.
+* **Visual Yaw Drift (The 6-DOF Limitation):** While the haptic feedback logic on the microcontroller is protected against Yaw-drift via the gravity projection, the raw Quaternions sent to the Unity Digital Twin still suffer from it. Visually, this results in a gradual, artificial 'twisting' of the leg in the 3D model during extended walking trials.
+* **Mechanical Wiring Vulnerability:** The use of breadboards, jumper wires, and I2C communication over longer physical distances along a moving limb is highly vulnerable to connection issues during dynamic walking. A momentary cable flex causes the I2C data bus to lock up and freeze the system immediately.
+* **Soft Tissue Artifacts:** Mounting directly over active muscles and skin introduces minor, dynamic measurement errors due to muscle contraction and skin shifting during the gait cycle.
 
 ## Conclusion and Future Work 
 
 #### Conclusion
-The Dual-IMU Haptic Monitor demonstrates that it is possible to successfully replace the traditional, passive mechanical treatment of genu recurvatum with an active, wearable biofeedback system. By biomechanically modeling the leg with two independent IMU sensors and applying quaternion-based Madgwick AHRS sensor fusion combined with a Gravity Inclination Method, this prototype eliminates the need for heavy, restrictive physical knee hinges and achieves a stable, drift-resistant knee angle estimate during dynamic gait.
-
-The system functions effectively as an "external haptic sense" that compensates for proprioceptive loss in post-stroke patients. The combination of decentralized, proportional vibrotactile warnings for the patient and real-time visual validation via the Digital Twin in Unity creates a powerful hybrid feedback loop. This not only reinforces the user's motor learning process but also significantly expands the diagnostic monitoring capabilities of the therapist.
+The Dual-IMU Haptic Monitor demonstrates that it is possible to successfully replace the traditional, passive mechanical treatment of genu recurvatum with an active, wearable biofeedback system. By biomechanically modeling the leg with two independent IMU sensors and applying quaternion-based Madgwick AHRS sensor fusion combined with a Gravity Inclination Method, this prototype eliminates the need for heavy, restrictive physical knee hinges. This approach achieves a stable, drift-resistant knee angle estimate during dynamic gait, remaining specifically protected against gyroscopic Yaw-drift.
 
 #### Future Work
 To further develop the current proof-of-concept into a production-ready, clinically viable medical device, the following iterations are essential:
 
-* **Elimination of Yaw Drift (9-DOF Upgrade):** To structurally resolve the visual drift in the 3D application, a transition from 6-DOF sensors to 9-DOF IMUs (such as the BNO085 or MPU9250) is necessary. The addition of an integrated magnetometer allows the Madgwick filter to use the geomagnetic field as an absolute anchor, making the Yaw axis just as stable as the Pitch and Roll.
+* **Elimination of Yaw Drift (9-DOF Upgrade):** To structurally resolve the visual drift in the 3D application and allow for true 3D relative quaternion math (which would solve the out-of-plane artifacts), a transition from 6-DOF sensors to 9-DOF IMUs (such as the BNO085 or MPU9250) is necessary. The integrated magnetometer allows the filter to use the geomagnetic field as an absolute anchor.
 * **Wireless Integration & Miniaturization (BLE):** Replacing fragile jumper cables and I2C wiring with individual Bluetooth Low Energy (BLE) microcontrollers mounted on a custom-made PCB. This prevents I2C communication errors caused by mechanical cable breakage and maximizes wearing comfort.
 * **Clinical Validation:** Initiating long-term testing sessions with the actual patient target group to quantitatively validate adaptation, reduction in tissue damage, and overall gait efficiency.
 
