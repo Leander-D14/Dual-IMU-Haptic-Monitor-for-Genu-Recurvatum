@@ -52,9 +52,9 @@ A significant hardware limitation when using multiple identical I2C sensors is t
 Instead of utilizing an unpredictable and processor-blocking `delay()`, the main execution loop (`loop()`) utilizes a strict, non-blocking timer via the native `millis()` function. The software exclusively executes calculations, sensor sampling, and telemetry transmission when exactly 10 milliseconds have elapsed since the previous cycle, establishing a fixed execution loop frequency of **100Hz**. This rock-solid time base ($\Delta t$) is a strict mathematical requirement to maintain the stability of the numerical integration steps within the sensor fusion algorithm.
 
 ### 3. Advanced Sensor Fusion (4D Quaternions)
-To compensate for the mutual limitations of accelerometers and gyroscopes, the system implements a **Madgwick AHRS filter** for each IMU. This filter continuously calculates the absolute 3D orientation of each leg segment as a full quaternion ($Q = [W, X, Y, Z]$), using the gravity vector as a stable anchor to correct gyroscopic drift over time.
+To compensate for the mutual limitations of accelerometers and gyroscopes, the system implements a Madgwick AHRS filter for each IMU. This filter continuously calculates the absolute 3D orientation of each leg segment as a full quaternion ($Q = [W, X, Y, Z]$), using the gravity vector as a stable anchor to correct gyroscopic drift over time.
 
-The relative knee angle is then extracted via a **Gravity Inclination Method**. From each quaternion, the vertical projection of the sensor's local axis onto the global gravity vector is computed using rotation matrix component $R_{31}$:
+The relative knee angle is then extracted via a Gravity Inclination Method. From each quaternion, the vertical projection of the sensor's local axis onto the global gravity vector is computed using rotation matrix component $R_{31}$:
 
 $$\text{verticalComponent} = 2(xz - wy)$$
 
