@@ -78,7 +78,7 @@ Instead of utilizing an unpredictable and processor-blocking `delay()`, the main
 
 Accelerometers react extremely fast but are highly sensitive to high-frequency noise from walking vibrations. Conversely, gyroscopes measure angular velocity accurately, but integrating this data over time introduces numerical errors, causing the calculated angle to drift. 
 
-To compensate for these mutual limitations, the system relies on a customized Madgwick AHRS filter. However, instead of extracting standard Euler angles—which are prone to cross-axis coupling and gimbal lock—the architecture implements a custom **Gravity Inclination Method** derived directly from the 4D Quaternions ($Q=[w, x, y, z]$).
+To compensate for these mutual limitations, the system relies on a customized Madgwick AHRS filter. However, instead of extracting standard Euler angles, which are prone to cross-axis coupling and gimbal lock, the architecture implements a custom **Gravity Inclination Method** derived directly from the 4D Quaternions ($Q=[w, x, y, z]$).
 
 The true hinge angle is calculated in three biomechanical steps:
 
