@@ -26,7 +26,7 @@ The **Dual-IMU Haptic Monitor** project offers an innovative, non-restrictive al
 
 1. **Hingeless Angle Tracking:** A physical hinge is no longer necessary. Instead of a rigid goniometer aligned with the joint, the system utilizes two independent MPU6050 IMU sensors mounted on the calf and thigh segments, calculating the relative knee angle electronically to maximize user comfort.
 2. **Context-Aware Gait Phase Detection:** Genu recurvatum is exclusively dangerous when the lower limb is bearing the patient's body weight (the stance phase). The system features an algorithm that detects a **Heel Strike** via an acceleration threshold exceeding 1.5g. Consequently, haptic warnings are strictly context-aware, arming the vibration logic only during the stance phase when the joint is under active load.
-3. **Advanced Sensor Fusion (4D Quaternions)**:To avoid gyroscopic drift and improve stability under dynamic movement, the architecture implements a Madgwick AHRS algorithm for each IMU, computing the absolute 3D orientation of each leg segment as a full quaternion. The relative knee angle is then extracted via a Gravity Inclination Method, which anchors both measurements independently to the gravity vector, yielding a stable and drift-resistant angle estimate during the stance phase.
+3. **Advanced Sensor Fusion (4D Quaternions)**: To avoid gyroscopic drift and improve stability under dynamic movement, the architecture implements a Madgwick AHRS algorithm for each IMU, computing the absolute 3D orientation of each leg segment as a full quaternion. The relative knee angle is then extracted via a Gravity Inclination Method, which anchors both measurements independently to the gravity vector, yielding a stable and drift-resistant angle estimate during the stance phase.
 4. **Hybrid Feedback Loop:** The disruptive audible alarm of previous setups is replaced by precise, proportional tactile vibration profiles delivered via high-fidelity *Drake Haptic Actuators* [6]. This data is simultaneously streamed via telemetry to a real-time **3D Digital Twin** in Unity. This creates a powerful dual-loop system: the patient receives physical (proprioceptive) guidance, while the physical therapist receives immediate visual (exteroceptive) confirmation of hyperextension and gait asymmetry for diagnostic mapping.
 
 ### Supplies (Bill of Materials)
@@ -60,7 +60,7 @@ To ensure robustness during dynamic walking, the hardware is mounted on an exter
 
 A significant hardware limitation when using multiple identical I2C sensors is the address conflict; by default, MPU6050 sensors share the exact same I2C address (0x68). In this design, this problem is elegantly solved by integrating the PCA9548A I2C multiplexer at address 0x70. Through a custom `tcaSelect(uint8_t i)` firmware function, this chip acts as a high-speed digital switch. By opening specific hardware channels sequentially, the microcontroller communicates targetedly at full speed (400kHz) with the upper thigh IMU on channel 3 and the lower calf IMU on channel 0. The DRV2605L haptic driver communicates directly on the I2C bus at address 0x5A, independently of the multiplexer.
 
-The wiring for this configuration, with is shown below:
+The wiring for this configuration is shown below:
 
 1. Arduino
 2. 2x MPU6050 IMU
