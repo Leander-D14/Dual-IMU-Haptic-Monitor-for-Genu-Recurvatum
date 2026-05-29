@@ -8,7 +8,7 @@ Genu recurvatum, or knee hyperextension, is a highly relevant clinical problem a
 * **Gait Inefficiency:** It results in an inefficient gait; because the knee does not bend normally, the leg effectively becomes longer. This raises the body's center of gravity, disrupts symmetry, and leads to a much higher metabolic energy expenditure during ambulation.
 * **Proprioceptive Loss:** Many stroke patients develop this abnormality because a loss of internal proprioception means they simply no longer physically feel when their knee joint reaches or exceeds the anatomical limit of 0 degrees [1].
 
-![Medical illustration of Genu Recurvatum bone structure](media/Hyperextension_knee.jpg)
+![Medical illustration of Genu Recurvatum bone structure](Media/Hyperextension_knee.jpg)
 
 ### The Haptic Advantage
 For this specific pathological challenge, haptic technology is ideally suited to act as an **external haptic sense**. Because the patient lacks the internal sensory warning that the knee is hyperextending, an external vibrotactile stimulus can directly substitute for this missing sensory feedback loop [4]. 
@@ -50,18 +50,18 @@ To ensure full reproducibility of this prototype, the complete Bill of Materials
 
 ## Methods: Technical Approach & System Architecture
 
-![System Architecture Flow Diagram](media/Flow_diagram.png)
+![System Architecture Flow Diagram](Media/Flow_diagram.png)
 
 The conceptual framework of the Dual-IMU Haptic Monitor relies on creating a wearable, real-time biofeedback system that replaces the patient's impaired proprioceptive sense. By treating the leg as a two-part biomechanical hinge system (thigh and calf), the relative knee angle can be continuously calculated without the need to place an obstructive physical hinge across the joint.
 
 ### 1. Hardware Integration & I2C Routing
 To ensure robustness during dynamic walking, the hardware is mounted on an external brace frame. The mainboard setup—consisting of the Arduino Micro, the DRV2605L haptic driver, and the primary MPU6050 IMU sensor—is securely attached to the thigh segment using Velcro straps. The second MPU6050 IMU sensor is fixed to the calf segment. This stabilization minimizes the structural influence of muscle contractions on the sensors and provides a stable platform for the wiring. Although the system uses a brace as a physical mounting frame, the angle measurement functions entirely electronically via the IMUs and requires no physical blockage or mechanical hinge components. The placement of these components on the physical prototype is illustrated below.
 
-![Hardware integration on the physical brace prototype](media/prototype.png)
+![Hardware integration on the physical brace prototype](Media/prototype.png)
 
 A significant hardware limitation when using multiple identical I2C sensors is the address conflict; by default, MPU6050 sensors share the exact same I2C address (0x68). In this design, this problem is elegantly solved by integrating the PCA9548A I2C multiplexer at address 0x70. Through a custom `tcaSelect(uint8_t i)` firmware function, this chip acts as a high-speed digital switch. By opening specific hardware channels sequentially, the microcontroller communicates targetedly at full speed (400kHz) with the upper thigh IMU on channel 3 and the lower calf IMU on channel 0. The DRV2605L haptic driver communicates directly on the I2C bus at address 0x5A, independently of the multiplexer. The wiring for this configuration is shown below.
 
-![Detailed wiring of the mainboard components](media/Breadbord_wiring.jpg)  
+![Detailed wiring of the mainboard components](Media/Breadbord_wiring.png)  
 
 ### 2. Control Loop & Time Synchronization
 Instead of utilizing an unpredictable and processor-blocking `delay()`, the main execution loop (`loop()`) utilizes a strict, non-blocking timer via the native `millis()` function. The software exclusively executes calculations, sensor sampling, and telemetry transmission when exactly 10 milliseconds have elapsed since the previous cycle, establishing a fixed execution loop frequency of **100Hz**. This rock-solid time base ($\Delta t$) is a strict mathematical requirement to maintain the stability of the numerical integration steps within the sensor fusion algorithm.
@@ -98,7 +98,7 @@ To accommodate anatomical variability and minor day-to-day variations in sensor 
 
 From this personalized zero point, the virtual 3D rig tracks the patient's anatomical movements exactly. For immediate visual feedback, the leg model in Unity turns bright red the moment the sensor fusion registers a hyperextension event below 0°. This creates a powerful, hybrid feedback loop: the patient is corrected physically (haptically) in real time, while the therapist monitors the kinematics visually (digitally) for gait mapping. As demonstrated below, the virtual 3D model provides immediate visual feedback.
 
-![Unity Digital Twin visualizing hyperextension in red](media/Hyperextension_knee.png)
+![Unity Digital Twin visualizing hyperextension in red](Media/Hyperextension_Unity.png)
 
 ## Discussion: Evaluation of the Dual-IMU Haptic Monitor
 
