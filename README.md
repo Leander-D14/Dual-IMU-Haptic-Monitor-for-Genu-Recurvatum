@@ -33,7 +33,6 @@ The **Dual-IMU Haptic Monitor** project offers an innovative, non-restrictive al
 
 To ensure full reproducibility of this prototype, the complete Bill of Materials is listed below. Where specific breakout boards were used (e.g., Adafruit), exact part numbers are provided.
 
-To ensure full reproducibility of this prototype, the complete Bill of Materials is listed below. Where specific breakout boards were used (e.g., Adafruit), exact part numbers are provided.
 
 | Component | Part Number / SKU | Qty | Estimated Cost | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
