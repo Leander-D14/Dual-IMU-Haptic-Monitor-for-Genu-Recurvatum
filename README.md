@@ -88,7 +88,7 @@ The true hinge angle is calculated in three biomechanical steps:
 3. **Elevation & Hinge Isolation:** Using the inverse sine ($\arcsin$), the absolute elevation angle of each leg segment relative to the horizontal plane is calculated. The true knee flexion is then derived as the difference between the two:
    $$\theta_{knee} = \theta_{calf} - \theta_{thigh}$$
 
-Because this method anchors both measurements independently to gravity, it remains robust against 6-DOF Yaw-drift and minor sensor vibrations. However, it is sensitive to yaw-axis misalignment between the two sensors—a physical rotational offset in the horizontal plane introduces a small systematic error. In practice, this is elegantly compensated by the system's hot-swappable calibration phase, which captures this specific resting offset and mathematically subtracts it as a baseline correction.
+Because this method anchors both measurements independently to gravity, it remains robust against 6-DOF Yaw-drift and minor sensor vibrations. The method is however susceptible to yaw-axis misalignment between the two sensors, where a physical rotational offset in the horizontal plane introduces a small systematic error. In practice, this is elegantly compensated by the system's hot-swappable calibration phase, which captures this specific resting offset and mathematically subtracts it as a baseline correction.
 
 ### 4. Gait Phase Detection & Proportional Feedback
 Genu recurvatum is exclusively harmful when the lower limb is bearing the patient's actual body weight during the stance phase of walking. To prevent false, disruptive warnings (for example, when the patient is safely sitting or lifting the leg), a context-aware Gait Phase Detection algorithm was developed.
